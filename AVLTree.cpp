@@ -318,14 +318,18 @@ vector<size_t> AVLTree::findRange(const std::string &lowKey, const std::string &
 
     vector<size_t> rangeResult; // store values in range
 
-    // call recursive helper
-    findRangeRecursive(this->root, lowKey, highKey, rangeResult);
+    // call Recurse helper
+    findRangeRecurse(this->root, lowKey, highKey, rangeResult);
 
     return rangeResult;
 }
 
 // Returns vector with all keys in tree length equals tree size
 std::vector<std::string> AVLTree::keys() const {
+
+    vector<std::string> keyVector;
+
+    keysRecurse(this->root, keyVector)
 }
 
 // Counts number key value pairs in tree and returns count
@@ -366,12 +370,12 @@ AVLTree& AVLTree::operator=(const AVLTree& other) {
         this->root = nullptr;
         this->AVLTreeSize = 0;
 
-        this->root = copyTreeRecursive(other.root);
+        this->root = copyTreeRecurse(other.root);
     }
     return *this;
 }
 
-BSTNode * AVLTree::copyTreeRecursive(const BSTNode *otherNode) {
+BSTNode * AVLTree::copyTreeRecurse(const BSTNode *otherNode) {
     if (otherNode == nullptr) {
         return nullptr; // base case
     }
@@ -381,8 +385,8 @@ BSTNode * AVLTree::copyTreeRecursive(const BSTNode *otherNode) {
     this->AVLTreeSize++;
 
     // copy subtrees
-    newNode->left = copyTreeRecursive(otherNode->left);
-    newNode->right = copyTreeRecursive(otherNode->right);
+    newNode->left = copyTreeRecurse(otherNode->left);
+    newNode->right = copyTreeRecurse(otherNode->right);
 
     // Update height
     newNode->updateHeight();
@@ -390,7 +394,7 @@ BSTNode * AVLTree::copyTreeRecursive(const BSTNode *otherNode) {
     return newNode;
 }
 
-void AVLTree::findRangeRecursive(const BSTNode *node, const string &lowKey, const string &highKey,
+void AVLTree::findRangeRecurse(const BSTNode *node, const string &lowKey, const string &highKey,
                                  vector<size_t> &rangeResult) const {
 
         if (node == nullptr) {
@@ -399,7 +403,7 @@ void AVLTree::findRangeRecursive(const BSTNode *node, const string &lowKey, cons
 
         // check low bound and traverse left
         if (node->key > lowKey) {
-            findRangeRecursive(node->left, lowKey, highKey, rangeResult);
+            findRangeRecurse(node->left, lowKey, highKey, rangeResult);
         }
 
         // check range and push value
@@ -409,42 +413,42 @@ void AVLTree::findRangeRecursive(const BSTNode *node, const string &lowKey, cons
 
         // check high bound and traverse right
         if (node->key < highKey) {
-            findRangeRecursive(node->right, lowKey, highKey, rangeResult);
+            findRangeRecurse(node->right, lowKey, highKey, rangeResult);
         }
 }
 
-void AVLTree::keysRecursive(const BSTNode *node, std::vector<std::string> &keyVector) const {
+void AVLTree::keysRecurse(const BSTNode *node, std::vector<std::string> &keyVector) const {
     if (node == nullptr) {
         return; // base case
     }
 
     // traverse left
-    keysRecursive(node->left, keyVector);
+    keysRecurse(node->left, keyVector);
 
     // push current key
     keyVector.push_back(node->key);
 
     // traverse right
-    keysRecursive(node->right, keyVector);
+    keysRecurse(node->right, keyVector);
 }
 
 // destructor
 AVLTree::~AVLTree() {
     // Helper function for post-order traversal to safely delete nodes
-    deleteNodesRecursive(this->root);
+    deleteNodesRecurse(this->root);
 
     this->root = nullptr; // reset members
     this->AVLTreeSize = 0;
 }
 
-void AVLTree::deleteNodesRecursive(BSTNode *node) {
+void AVLTree::deleteNodesRecurse(BSTNode *node) {
 
     if (node == nullptr) {
         return; // base case
     }
 
-    deleteNodesRecursive(node->left); // delete left subtree
-    deleteNodesRecursive(node->right); // delete right subtree
+    deleteNodesRecurse(node->left); // delete left subtree
+    deleteNodesRecurse(node->right); // delete right subtree
     delete node; // delete current node
 }
 

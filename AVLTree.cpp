@@ -329,7 +329,7 @@ std::vector<std::string> AVLTree::keys() const {
 
     vector<std::string> keyVector;
 
-    keysRecurse(this->root, keyVector)
+    keysRecurse(this->root, keyVector);
 }
 
 // Counts number key value pairs in tree and returns count

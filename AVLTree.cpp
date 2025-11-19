@@ -358,6 +358,12 @@ int AVLTree::getSubnodeHeight(BSTNode* node) const {
 
 // Copy constructor creates a deep copy of the other tree.
 AVLTree::AVLTree(const AVLTree& other) {
+    // initialize members
+    this->root = nullptr;
+    this->AVLTreeSize = 0; // copyTreeRecurse will increment this member
+
+    // call Recurse helper
+    this->root = copyTreeRecurse(other.root);
 }
 
 // Assignment operator creates a deep copy of the other tree. releases memory

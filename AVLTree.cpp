@@ -1,70 +1,582 @@
 //both urls for other repositories
 // https://github.com/trekker-8472/project5-avltree-trekk
 //https://github.com/trekker-8472/cs3100-wsu-dsa-janderson-f25-project5-avltree-project5-avltree-template?files=1
+/**
+ * AVLTree.pp
+ * Robert Pohl
+ * Project 5
+ */
 
 #include "AVLTree.h"
-
 #include <string>
+#include <optional>
+#include <vector>
+#include <algorithm>
+#include <functional>
 
-size_t AVLTree::AVLNode::numChildren() const {
-    return 0;
+using namespace std;
+
+// All classes need a constructor this one is an empty tree
+AVLTree::AVLTree() {
+    this->root = nullptr;     // critical: start with empty tree
+    this->AVLTreeSize = 0;    // size starts at 0
 }
 
-bool AVLTree::AVLNode::isLeaf() const {
-    return false;
-}
+// Inserts a new key-value pair into tree No Duplicates if successful insert rebalance (if necessary) false on fail
+bool AVLTree::insert(const std::string &key, size_t value) {
 
-size_t AVLTree::AVLNode::getHeight() const {
-    return 0;
-}
-
-bool AVLTree::removeNode(AVLNode*& current){
-    if (!current) {
-        return false;
+    if (this->root == nullptr) {//special case root node
+        this->root = new BSTNode(key, value);
+        this->AVLTreeSize++;
+        return true;
     }
 
-    AVLNode* toDelete = current;
-    auto nChildren = current->numChildren();
-    if (current->isLeaf()) {
-        // case 1 we can delete the node
-        current = nullptr;
-    } else if (current->numChildren() == 1) {
-        // case 2 - replace current with its only child
-        if (current->right) {
-            current = current->right;
-        } else {
-            current = current->left;
+    vector<BSTNode*> ancestorStorage;
+    BSTNode* currentNode = this->root;
+    BSTNode* parentNode = nullptr;
+
+    while (currentNode != nullptr) { //move through the tree
+        if (currentNode->key == key) {//elimate duplicates
+            return false;
         }
-    } else {
-        // case 3 - we have two children,
-        // get smallest key in right subtree by
-        // getting right child and go left until left is null
-        AVLNode* smallestInRight = current->right;
-        // I could check if smallestInRight is null,
-        // but it shouldn't be since the node has two children
-        while (smallestInRight->left) {
-            smallestInRight = smallestInRight->left;
+        ancestorStorage.push_back(currentNode);
+        parentNode = currentNode;
+
+        if (currentNode->key > key) {
+            currentNode = currentNode->left;
+            }
+        else {
+            currentNode = currentNode->right;
         }
-        std::string newKey = smallestInRight->key;
-        int newValue = smallestInRight->value;
-        remove(root, smallestInRight->key); // delete this one
-
-        current->key = newKey;
-        current->value = newValue;
-
-        current->height = current->getHeight();
-        balanceNode(current);
-
-        return true; // we already deleted the one we needed to so return
     }
-    delete toDelete;
+
+    BSTNode* newNode = new BSTNode(key, value);//create new node
+
+    if (parentNode->key > key) {//left right placement
+        parentNode->left = newNode;
+    }
+    else {
+        parentNode->right = newNode;
+    }
+
+    this->AVLTreeSize++;
+
+    //time to balance check
+
+    for (int i = ancestorStorage.size() - 1; i >= 0; i--) {
+        BSTNode* ancestor = ancestorStorage[i];
+        BSTNode* ancestorParent = nullptr;
+        if (i > 0) { // setup for rotation if and only if necessary
+            ancestorParent = ancestorStorage[i-1];
+        }
+        else {
+            ancestorParent = nullptr;
+        }
+        ancestor->updateHeight();//height and balance
+        int currBalance = ancestor->balanceFactor();
+
+        BSTNode* newAncestor = ancestor;
+
+        if (currBalance >= 2 && ancestor->left) {//added guard like in insert
+            //heavy left
+            if (ancestor->left &&ancestor->left->balanceFactor() < 0 ) {//double rotate
+                ancestor->left = rotateSetLeft(ancestor->left);
+                ancestor->updateHeight(); // Corrected: intermediate height update
+                newAncestor = rotateSetRight(ancestor);
+            }
+            else {//single rotate
+                newAncestor = rotateSetRight(ancestor);
+            }
+        }
+        else if (currBalance <= -2 && ancestor->right) {//double rotate
+            if (ancestor->right && ancestor->right->balanceFactor() > 0 ) {
+                ancestor->right = rotateSetRight(ancestor->right);
+                ancestor->updateHeight(); // Corrected: intermediate height update
+                newAncestor = rotateSetLeft(ancestor);
+            }
+            else {//single rotate
+                newAncestor = rotateSetLeft(ancestor);
+            }
+        }
+        if (newAncestor != ancestor) {
+            if (ancestorParent == nullptr) {
+                this->root = newAncestor;
+            } else if (ancestor == ancestorParent->left) {
+                ancestorParent->left = newAncestor;
+            } else {
+                ancestorParent->right = newAncestor;
+            }
+            newAncestor->updateHeight();
+
+            if (ancestorParent) {
+                ancestorParent->updateHeight(); // parent height refresh
+            }
+            break;
+        }
+    }
 
     return true;
 }
 
-bool AVLTree::remove(AVLNode *&current, KeyType key) {
+// Removes the key-value pair associated of key from tree; true if the key removed else false
+bool AVLTree::remove(const std::string &key) {
+
+    vector<BSTNode*> ancestorStorage;
+    BSTNode* currentNode = this->root;
+    BSTNode* parentNode = nullptr;
+    BSTNode* nodeToDelete = nullptr; // Node holding the key to be deleted
+
+    while (currentNode) { //move through the tree
+        if (currentNode->key == key) {//verify existence
+            nodeToDelete = currentNode;
+            break;
+        }
+        ancestorStorage.push_back(currentNode);
+        parentNode = currentNode;
+
+        if (currentNode->key > key) {
+            currentNode = currentNode->left;
+        } else {
+            currentNode = currentNode->right;
+        }
+    }
+
+    if (!nodeToDelete) { // Key not found
+        return false;
+    }
+
+    BSTNode* deletionNode = nodeToDelete; // Node that will be deleted via 'delete'
+    BSTNode* newChild = nullptr;
+
+
+    if (nodeToDelete->childCount() < 2) {
+        // Case 0 or 1 child
+
+        if (nodeToDelete->left) {
+            newChild = nodeToDelete->left; //account for the one child for later insertion
+        } else {
+            newChild = nodeToDelete->right;
+        }
+
+        if (!parentNode) { // special case root node deletion
+            this->root = newChild;
+        } else if (parentNode->left == nodeToDelete) {
+            parentNode->left = newChild;
+        } else {
+            parentNode->right = newChild;
+        }
+
+    } else {
+
+        BSTNode* successor = nodeToDelete->right;
+        BSTNode* successorParent = nodeToDelete;
+
+        // Traverse left to find the smallest node (Successor)
+        if (successor) {
+            if (successor->left) {
+                 // Ancestor for successor's parent
+                ancestorStorage.push_back(nodeToDelete);
+            }
+
+            while (successor->left) {
+                // Track path down to the successor for rebalancing
+                ancestorStorage.push_back(successor);
+                successorParent = successor;
+                successor = successor->left;
+            }
+        }
+
+        // Swap data: Copy Successor's data to the node being conceptually deleted
+        nodeToDelete->key = successor->key;
+        nodeToDelete->value = successor->value;
+
+        // The node to physically delete is the successor
+        deletionNode = successor;
+
+        // The successor's replacement is its own right child (since it has no left child)
+        newChild = successor->right;
+
+        // Successor's parent takes the replacement child
+        if (successorParent->left == successor) {
+            successorParent->left = newChild;
+        } else {
+            // This is the case where successorParent == nodeToDelete (successor was nodeToDelete->right)
+            successorParent->right = newChild;
+        }
+    }
+
+    delete deletionNode;
+    this->AVLTreeSize--;
+
+
+    // time to balance check and fix if necessary
+
+    for (int i = ancestorStorage.size() - 1; i >= 0; i--) {
+        BSTNode* ancestor = ancestorStorage[i];
+        BSTNode* ancestorParent = nullptr;
+
+        if (i > 0) { // setup for rotation if and only if necessary
+            ancestorParent = ancestorStorage[i-1];
+        } else {
+            ancestorParent = nullptr;
+        }
+
+        ancestor->updateHeight();//height and balance
+        int currBalance = ancestor->balanceFactor();
+
+        BSTNode* newAncestor = ancestor;
+
+        if (currBalance >= 2 && ancestor->left) {//added guard like in insert
+            //heavy left
+            if (ancestor->left && ancestor->left->balanceFactor() < 0) {//double rotate
+                ancestor->left = rotateSetLeft(ancestor->left);
+                ancestor->updateHeight(); // Corrected: Intermediate height update
+                newAncestor = rotateSetRight(ancestor);
+            } else {//single rotate
+                newAncestor = rotateSetRight(ancestor);
+            }
+        } else if (currBalance <= -2 && ancestor->right) {//double rotate
+            if (ancestor->right && ancestor->right->balanceFactor() > 0) {
+                ancestor->right = rotateSetRight(ancestor->right);
+                ancestor->updateHeight(); // Corrected: Intermediate height update
+                newAncestor = rotateSetLeft(ancestor);
+            } else {//single rotate
+                newAncestor = rotateSetLeft(ancestor);
+            }
+        }
+
+        if (newAncestor != ancestor) {// check the real one not the parent one
+            if (ancestorParent == nullptr) {
+                this->root = newAncestor;
+            } else if (ancestor == ancestorParent->left) {
+                ancestorParent->left = newAncestor;
+            } else {
+                ancestorParent->right = newAncestor;
+            }
+
+            if (ancestorParent) {
+                ancestorParent->updateHeight(); // parent height refresh
+            }
+            // NOTE: No break; here for AVL removal
+        }
+    }
+
+    return true;
+}
+// Checks whether key exists in tree.
+bool AVLTree::contains(const std::string& key) const {
+    BSTNode* currentNode = this->root;//start at beginning
+    while (currentNode != nullptr) {
+        if (currentNode->key == key) {
+            return true;
+        }
+        else if (currentNode->key > key) {
+            currentNode = currentNode->left;
+        }
+        else {
+            currentNode = currentNode->right;
+        }
+    }
     return false;
 }
 
-void AVLTree::balanceNode(AVLNode *&node) {
+// Retrieves the value of the key. and nullopt if empty
+optional<size_t> AVLTree::get(const std::string &key) const {
+    BSTNode* currentNode = this->root;//start at beginning
+    while (currentNode != nullptr) {//basically the same structure as contains but return value
+        if (currentNode->key == key) {
+            return currentNode->value;
+        }
+        else if (currentNode->key > key) {
+            currentNode = currentNode->left;
+        }
+        else {
+            currentNode = currentNode->right;
+        }
+    }
+    return nullopt;
+}
+
+// Accesses value associated key returning value or changing it as needed (don't worry if invalid)
+size_t & AVLTree::operator[](const std::string &key) {
+    BSTNode* currentNode = this->root;//start at beginning
+    while (currentNode != nullptr) {
+        if (currentNode->key == key) {
+            return currentNode->value;
+        }
+        if (currentNode->key > key) {
+            currentNode = currentNode->left;
+        }
+        else {
+            currentNode = currentNode->right;
+        }
+    }
+}
+
+// Finds all values associated with range giving vector of the key range unless empty, =0.
+vector<size_t> AVLTree::findRange(const std::string &lowKey, const std::string &highKey) const {
+
+    vector<size_t> rangeResult; // store values in range
+
+    // call recursive helper
+    findRangeRecursive(this->root, lowKey, highKey, rangeResult);
+
+    return rangeResult;
+}
+
+// Returns vector with all keys in tree length equals tree size
+std::vector<std::string> AVLTree::keys() const {
+}
+
+// Counts number key value pairs in tree and returns count
+size_t AVLTree::size() const {
+    return this->AVLTreeSize;
+}
+
+// Returns AVL tree height
+int AVLTree::getHeight() const {
+    if (this->root == nullptr) {
+        return -1;
+    }
+    else {
+        return this->root->height;
+    }
+}
+
+int AVLTree::getSubnodeHeight(BSTNode* node) const {
+    if (node == nullptr) {
+        return -1;
+    }
+    else {
+        return node->height;
+    }
+}
+
+// Copy constructor creates a deep copy of the other tree.
+AVLTree::AVLTree(const AVLTree& other) {
+}
+
+// Assignment operator creates a deep copy of the other tree. releases memory
+AVLTree& AVLTree::operator=(const AVLTree& other) {
+    if (this != &other) { // check for self-assignment protection
+        // clean up existing resources
+        this->~AVLTree();
+
+        //copy constructor
+        this->root = nullptr;
+        this->AVLTreeSize = 0;
+
+        this->root = copyTreeRecursive(other.root);
+    }
+    return *this;
+}
+
+BSTNode * AVLTree::copyTreeRecursive(const BSTNode *otherNode) {
+    if (otherNode == nullptr) {
+        return nullptr; // base case
+    }
+
+    // Create and increment
+    BSTNode* newNode = new BSTNode(otherNode->key, otherNode->value);
+    this->AVLTreeSize++;
+
+    // copy subtrees
+    newNode->left = copyTreeRecursive(otherNode->left);
+    newNode->right = copyTreeRecursive(otherNode->right);
+
+    // Update height
+    newNode->updateHeight();
+
+    return newNode;
+}
+
+void AVLTree::findRangeRecursive(const BSTNode *node, const string &lowKey, const string &highKey,
+                                 vector<size_t> &rangeResult) const {
+
+        if (node == nullptr) {
+            return; // base case
+        }
+
+        // check low bound and traverse left
+        if (node->key > lowKey) {
+            findRangeRecursive(node->left, lowKey, highKey, rangeResult);
+        }
+
+        // check range and push value
+        if (node->key >= lowKey && node->key <= highKey) {
+            rangeResult.push_back(node->value);
+        }
+
+        // check high bound and traverse right
+        if (node->key < highKey) {
+            findRangeRecursive(node->right, lowKey, highKey, rangeResult);
+        }
+}
+
+void AVLTree::keysRecursive(const BSTNode *node, std::vector<std::string> &keyVector) const {
+    if (node == nullptr) {
+        return; // base case
+    }
+
+    // traverse left
+    keysRecursive(node->left, keyVector);
+
+    // push current key
+    keyVector.push_back(node->key);
+
+    // traverse right
+    keysRecursive(node->right, keyVector);
+}
+
+// destructor
+AVLTree::~AVLTree() {
+    // Helper function for post-order traversal to safely delete nodes
+    deleteNodesRecursive(this->root);
+
+    this->root = nullptr; // reset members
+    this->AVLTreeSize = 0;
+}
+
+void AVLTree::deleteNodesRecursive(BSTNode *node) {
+
+    if (node == nullptr) {
+        return; // base case
+    }
+
+    deleteNodesRecursive(node->left); // delete left subtree
+    deleteNodesRecursive(node->right); // delete right subtree
+    delete node; // delete current node
+}
+
+// Stream insertion operator. Prints tree contents
+std::ostream& operator<<(std::ostream& os, const AVLTree& tree) {
+    printSideways(os, tree.root, 0);
+    return os;
+}
+
+// constructor, default
+BSTNode::BSTNode(const std::string& k, size_t v) {
+    // assign key and value
+    key = k;
+    value = v;
+
+    // initialize children to null
+    left = nullptr;
+    right = nullptr;
+
+    // initialize height to 0 (leaf node height)
+    height = 0;
+
+}
+
+// Checks if leaf
+bool BSTNode::isLeaf() const {
+    if (left == nullptr && right == nullptr) { //if both null then is leaf
+        return true;
+    }
+    return false;
+}
+
+// Returns Children number
+int BSTNode::childCount() const {
+    int count = 0;
+    if (left != nullptr) {//if null then nothing to add
+        count++;
+    }
+    if (right != nullptr) {//if null then nothing to add
+        count++;
+    }
+    return count;
+}
+
+// returns balance factor (left minus right)
+int BSTNode::balanceFactor() const {
+    int balanceFactor = 0;//start point
+    int ltHeight;//makiung left and right explicit
+    int rtHeight;
+
+    if (left != nullptr) {//if not null add value of height from left
+        ltHeight = left->height;
+    }
+    else {
+        ltHeight = -1;
+    }
+    if (right != nullptr) {//if not null subtract right value
+        rtHeight = right->height;
+    }
+    else {
+        rtHeight = -1;
+    }
+
+    balanceFactor = ltHeight - rtHeight;
+
+    return balanceFactor;
+}
+
+// Updates the height based on children after insert/remove operations.
+void BSTNode::updateHeight() {
+    int leftHeight;
+    int rightHeight;
+    if (left != nullptr) {
+        leftHeight = left->height;
+    }
+    else {
+        leftHeight = -1;
+    }
+    if (right != nullptr) {
+        rightHeight = right->height;
+    }
+    else {
+        rightHeight = -1;
+    }
+    this->height = 1 + std::max(leftHeight, rightHeight);
+}
+
+// return all Trees values summed self inclusive
+// size_t BSTNode::subtreeValueSum() const {
+//     return 0;
+// }
+
+BSTNode* rotateSetRight(BSTNode *pivotPoint) { //if the set of nodes is heavy left they must be rotated right
+
+    if (!pivotPoint || !pivotPoint->left) {//added guard
+        return pivotPoint;
+    }
+
+    BSTNode* newPoint = pivotPoint->left; //new node top point
+    BSTNode* rtSubTree = newPoint->right; //define right subtree
+
+    newPoint->right = pivotPoint; //rotates the pivot point around
+    pivotPoint->left = rtSubTree; //new child of pivot point
+    pivotPoint->updateHeight(); //update the height
+    newPoint->updateHeight(); //update the height
+    return newPoint;
+}
+
+BSTNode* rotateSetLeft(BSTNode *pivotPoint) {//mirror above
+
+    if (!pivotPoint || !pivotPoint->right) {//added guard
+        return pivotPoint;
+    }
+
+    BSTNode* newPoint = pivotPoint->right; //new node top point
+    BSTNode* ltSubTree = newPoint->left; //define right subtree
+
+    newPoint->left = pivotPoint; //rotates the pivot point around
+    pivotPoint->right = ltSubTree; //new child of pivot point
+    pivotPoint->updateHeight(); //update the height
+    newPoint->updateHeight(); //update the height
+    return newPoint;
+}
+
+void printSideways(std::ostream& os, const BSTNode* node, int depth) { //prints tree sideways using right-child-first traversal
+    if (!node) return; //base case: null node
+
+    printSideways(os, node->right, depth + 1); //print right subtree first
+
+    for (int i = 0; i < depth; ++i) os << "    "; //indent based on depth
+    os << "{" << node->key << ": " << node->value << "} (H:" << node->height
+       << " BF:" << node->balanceFactor() << ")" << std::endl; //print current node
+
+    printSideways(os, node->left, depth + 1); //print left subtree last
 }

@@ -1,3 +1,7 @@
+//both urls for other repositories
+// https://github.com/trekker-8472/project5-avltree-trekk
+//https://github.com/trekker-8472/cs3100-wsu-dsa-janderson-f25-project5-avltree-project5-avltree-template?files=1
+
 #include "AVLTree.h"
 
 #include <string>
